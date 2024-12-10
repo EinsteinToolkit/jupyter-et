@@ -13,8 +13,8 @@ ENV PYVER 3.8
 ENV DEBIAN_FRONTEND=noninteractive
 
 # Update per release
-ENV ET_RELEASE ET_2023_11
-ENV KUIBIT_RELEASE 1.4.0
+ENV ET_RELEASE ET_2024_11
+ENV KUIBIT_RELEASE 1.5
 
 # Including --no-install-recommends does help optimize
 # the size of the image, but it makes it much harder to
@@ -77,9 +77,9 @@ RUN pip3 install jupyter \
 # We need a modern cmake to build AMReX
 RUN mkdir dist && \
     (cd dist && \
-    wget https://github.com/Kitware/CMake/releases/download/v3.21.2/cmake-3.21.2-linux-x86_64.tar.gz && \
-    tar xzf cmake-3.21.2-linux-x86_64.tar.gz && \
-    rsync -r cmake-3.21.2-linux-x86_64/ /usr/local && \
+    wget https://github.com/Kitware/CMake/releases/download/v3.29.6/cmake-3.29.6-linux-x86_64.tar.gz && \
+    tar xzf cmake-3.29.6-linux-x86_64.tar.gz && \
+    rsync -r cmake-3.29.6-linux-x86_64/ /usr/local && \
     true) && \
     rm -rf dist
 
@@ -220,6 +220,7 @@ RUN mkdir src && \
 ### New for CarpetX above ###
 
 COPY build-cactus-tarball.sh /usr/local/bin/build-cactus-tarball.sh
+RUN chmod og+rx /usr/local/bin/build-cactus-tarball.sh
 RUN useradd -m etuser -u 10000 -d /usr/etuser
 WORKDIR /usr/etuser
 USER etuser
