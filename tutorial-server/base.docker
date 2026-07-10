@@ -2,35 +2,36 @@
 #
 # Distributed under the LGPL
 
-# It is possible to use a later version of Ubuntu,
-# however, if one does that then a Singularity version
-# of the image will not run on Shelob and other clusters
-# with older linux kernels.
-FROM ubuntu:20.04
+# NOTE: this is Ubuntu 22.04 (upgraded from 20.04 for ET_2026_05).
+# A Singularity image built from this will require a newer kernel
+# than 20.04 needed, so it may no longer run on Shelob and other
+# clusters with old kernels. Revert to ubuntu:20.04 here if that
+# compatibility is needed again.
+FROM ubuntu:22.04
 
 USER root
-ENV PYVER 3.8
+ENV PYVER 3.10
 ENV DEBIAN_FRONTEND=noninteractive
 
 # Update per release
-ENV ET_RELEASE ET_2025_05
-ENV KUIBIT_RELEASE 1.5.0
+ENV ET_RELEASE ET_2026_05
+ENV KUIBIT_RELEASE 1.6.1
 
 # Including --no-install-recommends does help optimize
 # the size of the image, but it makes it much harder to
 # get the list of packages right. This list works.
 RUN apt-get -qq update && \
     apt-get -qq install --no-install-recommends locales locales-all \
-        g++-10 python python3-pip gfortran-10 make git m4 patch \
+        g++-10 python3-pip gfortran-10 make git m4 patch \
         subversion wget curl gnuplot gnuplot-x11 time libmpich-dev \
         libhdf5-mpich-dev mpich procps unzip mercurial file libmkl-dev \
         libnuma-dev numactl hwloc libhwloc-dev libssl-dev python3-pyudev libudev-dev \
-        hdf5-tools gdb gsl-bin libgsl0-dev python3-setuptools cmake libboost-dev \
+        hdf5-tools gdb gsl-bin python3-setuptools cmake libboost-dev \
         ffmpeg imagemagick libgsl-dev libopenblas-dev libpapi-dev fftw3-dev \
         liblapack-dev vim emacs nano openssh-client pkg-config \
         libpython${PYVER}-dev libpython${PYVER}-dbg \
         libscalapack-mpich-dev libscalapack-mpi-dev \
-        rsync vim nano \
+        rsync \
         libhdf5-dev libboost-all-dev libpython3-dev && \
     apt-get -qq clean all && \
     apt-get -qq autoclean && \
@@ -40,8 +41,8 @@ RUN apt-get -qq update && \
 RUN update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-10 10
 RUN update-alternatives --install /usr/bin/gfortran gfortran /usr/bin/gfortran-10 10
 
-RUN pip3 install pip==22.2.2
-RUN ln -s /usr/local/bin/pip /usr/bin/pip3.8
+RUN pip3 install --upgrade pip
+#RUN ln -s /usr/local/bin/pip /usr/bin/pip${PYVER}
 
 # It is possible to install matplotlib and numpy using
 # apt, unfortunately, one cannot install jupyter that
