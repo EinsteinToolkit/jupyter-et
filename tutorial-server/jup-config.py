@@ -250,6 +250,18 @@ c.JupyterHub.ssl_ciphers =  'ECDHE-RSA-AES128-GCM-SHA256:ECDHE-RSA-AES256-GCM-SH
 
 c.JupyterHub.base_url = '/'
 
+# Lets a Docker Hub webhook reach the deploy-hook sidecar (see
+# deploy_hook.py) at https://<host>/services/deploy-hook/?token=<secret>
+# without opening any port beyond the one JupyterHub already uses. This is
+# a bare proxy route with no Hub-login requirement, since Docker Hub can't
+# authenticate as a Hub user; deploy_hook.py does its own secret check.
+c.JupyterHub.services = [
+    {
+        'name': 'deploy-hook',
+        'url': 'http://deploy-hook:9000',
+    }
+]
+
 # Required by LSU security
 c.JupyterHub.tornado_settings = {
         "headers": {

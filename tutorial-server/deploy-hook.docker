@@ -1,0 +1,13 @@
+# Copyright (c) 2019 Steven R. Brandt, and Roland Haas
+#
+# Distributed under the LGPL
+FROM python:3.12-alpine
+
+RUN apk add --no-cache docker-cli docker-cli-compose
+
+COPY deploy_hook.py /deploy_hook.py
+
+ENV COMPOSE_FILE=docker-compose.cilogon.yml
+ENV COMPOSE_SERVICE=et-cilogon
+
+CMD ["python3", "/deploy_hook.py"]

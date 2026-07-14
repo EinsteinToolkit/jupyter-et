@@ -27,3 +27,30 @@ services:
       - home_fs:/home
     restart: on-failure
     entrypoint: bash -x /startup.sh
+
+  deploy-hook:
+    build:
+        context: .
+        dockerfile: deploy-hook.docker
+    image: einsteintoolkit/et-deploy-hook
+    container_name: et-deploy-hook
+    env_file:
+        # The file should contain:
+        # DEPLOY_HOOK_SECRET=<a long random token, used in the webhook URL>
+        - variables.env
+    environment:
+        - COMPOSE_FILE=docker-compose.cilogon.yml
+        - COMPOSE_SERVICE=et-cilogon
+    volumes:
+      # The docker socket lets this container pull/recreate et-cilogon on the
+      # host. Mounting the repo dir at the SAME absolute path it lives at on
+      # the host (not some other path like /deploy) is required: `docker
+      # compose` running in here resolves relative paths (env_file, build
+      # context) itself, but the daemon it talks to is the host daemon, so
+      # those resolved paths must already be valid host paths. This only
+      # works if `docker compose up` is launched from this directory, since
+      # $PWD is what supplies the path below.
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ${PWD}:${PWD}
+    working_dir: ${PWD}
+    restart: on-failure
