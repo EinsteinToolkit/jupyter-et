@@ -15,7 +15,7 @@ RUN pip3 install oauthenticator==15.1.0 tornado python-oauth2 jupyterhub-dummyau
 RUN curl -fsSL https://deb.nodesource.com/setup_lts.x | bash -
 RUN apt-get install -y nodejs
 RUN apt-get update && \
-    apt-get -y --fix-missing install gnupg policycoreutils cron nodejs && \
+    apt-get -y --fix-missing install gnupg policycoreutils cron nodejs logrotate && \
     apt-get purge
 
 RUN npm install -g configurable-http-proxy
@@ -31,8 +31,12 @@ RUN chmod 711 /jup-config.py
 
 COPY make_users.py /usr/local/bin/
 RUN chmod 755 /usr/local/bin/make_users.py
-COPY flag_stale_users.py delete_flagged_users.py /usr/local/bin/
-RUN chmod 755 /usr/local/bin/flag_stale_users.py /usr/local/bin/delete_flagged_users.py
+COPY flag_stale_users.py delete_flagged_users.py check_disk_usage.py /usr/local/bin/
+RUN chmod 755 /usr/local/bin/flag_stale_users.py /usr/local/bin/delete_flagged_users.py \
+    /usr/local/bin/check_disk_usage.py
+
+COPY tutorial-server.logrotate /etc/logrotate.d/tutorial-server
+RUN chmod 644 /etc/logrotate.d/tutorial-server
 
 # Low-privilege account telegram-send runs as, so the bot token isn't
 # touched by anything running as root. Its home dir is under /home

@@ -1,0 +1,22 @@
+# Copyright (c) 2019 Steven R. Brandt, and Roland Haas
+#
+# Distributed under the LGPL
+#
+# Installed at /etc/logrotate.d/tutorial-server, invoked hourly via
+# crontab.txt (not relying on the distro's cron.daily wiring, since this
+# container manages its own crontab already). copytruncate is required
+# since jupyterhub/cron keep these files open across a normal rename-based
+# rotation. Keep this list in sync with check_disk_usage.py's LOG_FILES.
+/var/log/jup-log.txt
+/var/log/flag-stale-users.log
+/var/log/check-disk-usage.log
+/tmp/git-refresh.log
+{
+    daily
+    maxsize 50M
+    rotate 7
+    compress
+    missingok
+    notifempty
+    copytruncate
+}

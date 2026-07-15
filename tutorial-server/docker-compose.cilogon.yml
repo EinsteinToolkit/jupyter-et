@@ -27,6 +27,16 @@ services:
       - home_fs:/home
     restart: on-failure
     entrypoint: bash -x /startup.sh
+    # `bash -x` plus jupyterhub's own piped-through stdout run for as long
+    # as this container stays up (weeks, between deploys) and Docker's
+    # json-file driver has no size limit by default -- this is likely a
+    # bigger contributor to the disk filling up than any log file inside
+    # the container. logrotate can't touch this; it's outside any volume.
+    logging:
+      driver: json-file
+      options:
+        max-size: "20m"
+        max-file: "5"
 
   deploy-hook:
     build:
@@ -52,5 +62,13 @@ services:
       # $PWD is what supplies the path below.
       - /var/run/docker.sock:/var/run/docker.sock
       - ${PWD}:${PWD}
+      # Read-only: deploy_hook.py only needs to notice when these change,
+      # to restart et-juphub so its proxy picks up the renewed cert.
+      - /etc/ssl:/etc/ssl:ro
     working_dir: ${PWD}
     restart: on-failure
+    logging:
+      driver: json-file
+      options:
+        max-size: "20m"
+        max-file: "5"
