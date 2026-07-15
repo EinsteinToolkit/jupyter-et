@@ -36,6 +36,26 @@ def accept_user(user_id):
             print(user_id, coded_user_id, file=fd)
         return False
 
+def record_login(username, email):
+    import datetime
+    fname = "/home/user_registry.txt"
+    now = datetime.datetime.utcnow().isoformat()
+    entries = {}
+    if os.path.exists(fname):
+        with open(fname, "r") as fd:
+            for line in fd:
+                line = line.strip()
+                if not line:
+                    continue
+                parts = line.split(":", 2)
+                if len(parts) == 3:
+                    entries[parts[0]] = (parts[1], parts[2])
+    entries[username] = (email, now)
+    with open(fname, "w") as fd:
+        for uname, (em, ts) in entries.items():
+            fd.write(f"{uname}:{em}:{ts}\n")
+    os.chmod(fname, 0o0600)
+
 pp = pprint.PrettyPrinter(indent=2)
 
 with open("/users/relay.txt", "r") as fd:
@@ -209,6 +229,7 @@ class CILogonWhitelistAuthenticator(CILogonOAuthenticator):
         #    return None
 
         if accept_user(email):
+            record_login(username, email)
             return userdict
 
         return None

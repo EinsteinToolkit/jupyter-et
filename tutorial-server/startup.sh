@@ -13,4 +13,9 @@ then
     cp /home/shadow /etc/shadow
 fi
 
+# home_fs already has real content by now, so useradd -m in cilogon.docker
+# won't have populated this on its own -- ensure it every boot instead.
+mkdir -p /home/notify
+chown notify:notify /home/notify
+
 jupyterhub --ip 0.0.0.0 --port 443 -f jup-config.py 2>&1 | tee /var/log/jup-log.txt

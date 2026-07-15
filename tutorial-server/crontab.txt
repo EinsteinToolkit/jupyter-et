@@ -1,1 +1,2 @@
 0 0 * * * /usr/local/bin/git-refresh.sh
+30 1 * * * /usr/local/bin/flag_stale_users.py >> /var/log/flag-stale-users.log 2>&1

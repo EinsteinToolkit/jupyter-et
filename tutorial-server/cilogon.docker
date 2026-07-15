@@ -10,7 +10,7 @@ RUN mkdir -p /usr/local/lib/python${PYVER}/dist-packages/notebook/static/compone
 RUN cp jquery-3.x-git.min.js /usr/local/lib/python${PYVER}/dist-packages/notebook/static/components/jquery/jquery.min.js
 RUN cp jquery-3.x-git.min.js /usr/local/share/jupyterhub/static/components/jquery/dist/jquery.min.js
 
-RUN pip3 install oauthenticator==15.1.0 tornado python-oauth2 jupyterhub-dummyauthenticator mpld3
+RUN pip3 install oauthenticator==15.1.0 tornado python-oauth2 jupyterhub-dummyauthenticator mpld3 telegram-send
 
 RUN curl -fsSL https://deb.nodesource.com/setup_lts.x | bash -
 RUN apt-get install -y nodejs
@@ -31,6 +31,15 @@ RUN chmod 711 /jup-config.py
 
 COPY make_users.py /usr/local/bin/
 RUN chmod 755 /usr/local/bin/make_users.py
+COPY flag_stale_users.py delete_flagged_users.py /usr/local/bin/
+RUN chmod 755 /usr/local/bin/flag_stale_users.py /usr/local/bin/delete_flagged_users.py
+
+# Low-privilege account telegram-send runs as, so the bot token isn't
+# touched by anything running as root. Its home dir is under /home
+# (persisted volume) but useradd -m here only takes effect if that volume
+# is empty on first creation -- startup.sh re-creates it every boot too,
+# since an already-populated home_fs volume won't pick up new image content.
+RUN useradd -r -m -d /home/notify -s /usr/sbin/nologin notify
 ENV LANG en_US.UTF-8
 
 # Hide the API token
