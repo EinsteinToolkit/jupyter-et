@@ -75,8 +75,8 @@ def main():
             delete_account(username)
             strip_username(NAME_MAP, username)
             strip_username(REGISTRY, username)
-            report.append((username, email, codeme(email)))
-            print(f"Deleted {username} ({email})")
+            report.append((username, email, codeme(email) if email else None))
+            print(f"Deleted {username} ({email or 'no email on file'})")
         except Exception as e:
             print(f"FAILED to delete {username}: {e}")
             remaining.append(line)
@@ -89,7 +89,13 @@ def main():
     if report:
         print("\nRemove these hashes from tutorials-whitelist.txt:")
         for username, email, h in report:
-            print(f"{h}  # {username} <{email}>")
+            if h:
+                print(f"{h}  # {username} <{email}>")
+            else:
+                print(
+                    f"(no email on file, can't compute hash)  # {username} "
+                    "-- check tutorials-whitelist.txt manually if needed"
+                )
 
 
 if __name__ == "__main__":

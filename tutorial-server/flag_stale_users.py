@@ -8,6 +8,12 @@
 # candidates to pending_deletion.txt and sends a Telegram message about
 # accounts newly flagged in this run. Run delete_flagged_users.py separately
 # to actually remove them.
+#
+# Also flags a second, riskier category: home directories that predate
+# user_registry.txt entirely (so we have no login history at all for them)
+# but whose files haven't been touched in LEGACY_STALE_DAYS. These are
+# recorded with an empty email field, since we never captured one for them
+# -- delete_flagged_users.py can't produce a whitelist hash for those.
 import datetime
 import os
 import shlex
@@ -16,7 +22,9 @@ import subprocess
 REGISTRY = "/home/user_registry.txt"
 EXEMPT = "/home/cleanup_exempt.txt"
 PENDING = "/home/pending_deletion.txt"
+HOME_DIR = "/home"
 STALE_DAYS = int(os.environ.get("STALE_DAYS", "90"))
+LEGACY_STALE_DAYS = int(os.environ.get("LEGACY_STALE_DAYS", "365"))
 
 
 def read_registry():
@@ -55,6 +63,55 @@ def already_pending_usernames():
     return names
 
 
+def is_user_home(name):
+    path = os.path.join(HOME_DIR, name)
+    return os.path.isdir(path) and os.path.exists(os.path.join(path, ".bashrc"))
+
+
+def most_recent_mtime(path):
+    # Only real file mtimes count as "activity" -- directory mtimes reflect
+    # entry add/remove/rename, not content changes, and would dominate here
+    # (e.g. right after creating the home dir) even if every file inside is
+    # actually old.
+    latest = None
+    for root, _dirs, files in os.walk(path):
+        for f in files:
+            try:
+                m = os.path.getmtime(os.path.join(root, f))
+            except OSError:
+                continue
+            if latest is None or m > latest:
+                latest = m
+    if latest is None:
+        # No files at all -- fall back to the directory's own mtime.
+        latest = os.path.getmtime(path)
+    return latest
+
+
+def find_legacy_stale_users(registry, exempt, already_flagged):
+    threshold = datetime.datetime.utcnow() - datetime.timedelta(
+        days=LEGACY_STALE_DAYS
+    )
+    candidates = []
+    try:
+        names = os.listdir(HOME_DIR)
+    except OSError:
+        return candidates
+    for name in names:
+        if name in registry or name in exempt or name in already_flagged:
+            continue
+        if not is_user_home(name):
+            continue
+        try:
+            latest = most_recent_mtime(os.path.join(HOME_DIR, name))
+        except OSError:
+            continue
+        last_activity = datetime.datetime.utcfromtimestamp(latest)
+        if last_activity < threshold:
+            candidates.append((name, "", last_activity.isoformat()))
+    return candidates
+
+
 def main():
     registry = read_registry()
     exempt = read_names(EXEMPT)
@@ -72,6 +129,9 @@ def main():
         if last_login < threshold:
             newly_flagged.append((username, email, last_login_iso))
 
+    legacy_flagged = find_legacy_stale_users(registry, exempt, already_flagged)
+    newly_flagged.extend(legacy_flagged)
+
     if not newly_flagged:
         print("No newly-stale accounts found")
         return
@@ -81,10 +141,16 @@ def main():
             fd.write(f"{username}:{email}:{last_login_iso}\n")
     os.chmod(PENDING, 0o0600)
 
-    lines = [f"{u} ({e}) last login {t}" for u, e, t in newly_flagged]
+    lines = [
+        f"{u} (no login record, files untouched since {t})"
+        if not e
+        else f"{u} ({e}) last login {t}"
+        for u, e, t in newly_flagged
+    ]
     message = (
         f"{len(newly_flagged)} account(s) flagged for deletion "
-        f"(inactive {STALE_DAYS}+ days):\n" + "\n".join(lines)
+        f"(inactive {STALE_DAYS}+ days, or no login record and files "
+        f"untouched {LEGACY_STALE_DAYS}+ days):\n" + "\n".join(lines)
     )
     print(message)
     # "su -" (login shell) sets HOME from notify's passwd entry, so

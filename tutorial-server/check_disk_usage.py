@@ -4,11 +4,12 @@
 # Distributed under the LGPL
 #
 # Run periodically (see crontab.txt) to catch the filesystem-fill problem
-# early: alerts via Telegram (as the notify user) when a watched mount is
-# nearly full, or when a watched log file grows unusually fast between
-# checks. Only notifies on OK<->ALERT state transitions, not on every tick
-# while a condition remains active, so it doesn't spam the same alert
-# forever if nobody's free to fix it right away.
+# early, plus general resource pressure: alerts via Telegram (as the notify
+# user) when a watched mount is nearly full, a watched log file grows
+# unusually fast between checks, memory usage is too high, or system load
+# is too high relative to CPU count. Only notifies on OK<->ALERT state
+# transitions, not on every tick while a condition remains active, so it
+# doesn't spam the same alert forever if nobody's free to fix it right away.
 import json
 import os
 import shlex
@@ -29,13 +30,23 @@ LOG_FILES = [
     if p
 ]
 LOG_GROWTH_ALERT_MB = float(os.environ.get("LOG_GROWTH_ALERT_MB", "100"))
+MEM_ALERT_PERCENT = float(os.environ.get("MEM_ALERT_PERCENT", "90"))
+# Alert when the 5-minute load average exceeds this multiple of CPU count --
+# a load of 8 means "overloaded" on a 2-core box but is fine on 8 cores.
+LOAD_ALERT_MULTIPLIER = float(os.environ.get("LOAD_ALERT_MULTIPLIER", "2.0"))
 
 
 def load_state():
     if os.path.exists(STATE_FILE):
         with open(STATE_FILE) as fd:
             return json.load(fd)
-    return {"disk_alert": {}, "log_sizes": {}, "log_alert": {}}
+    return {
+        "disk_alert": {},
+        "log_sizes": {},
+        "log_alert": {},
+        "mem_alert": False,
+        "load_alert": False,
+    }
 
 
 def save_state(state):
@@ -90,10 +101,60 @@ def check_logs(state):
         state["log_sizes"][path] = size
 
 
+def read_meminfo():
+    info = {}
+    with open("/proc/meminfo") as fd:
+        for line in fd:
+            key, _, rest = line.partition(":")
+            info[key] = int(rest.strip().split()[0])  # kB
+    return info
+
+
+def check_memory(state):
+    try:
+        info = read_meminfo()
+        total = info["MemTotal"]
+        available = info.get("MemAvailable", info.get("MemFree", 0))
+    except (OSError, KeyError, IndexError, ValueError):
+        return
+    if total <= 0:
+        return
+    percent = (total - available) / total * 100
+    was_alerting = state.get("mem_alert", False)
+    is_alerting = percent >= MEM_ALERT_PERCENT
+    if is_alerting and not was_alerting:
+        notify(f"Memory usage alert: {percent:.1f}% used")
+    elif was_alerting and not is_alerting:
+        notify(f"Memory usage OK again: {percent:.1f}% used")
+    state["mem_alert"] = is_alerting
+
+
+def check_load(state):
+    try:
+        with open("/proc/loadavg") as fd:
+            load5 = float(fd.read().split()[1])
+    except (OSError, IndexError, ValueError):
+        return
+    cpus = os.cpu_count() or 1
+    ratio = load5 / cpus
+    was_alerting = state.get("load_alert", False)
+    is_alerting = ratio >= LOAD_ALERT_MULTIPLIER
+    if is_alerting and not was_alerting:
+        notify(
+            f"Load average alert: 5m load {load5:.2f} on {cpus} cpu(s) "
+            f"({ratio:.2f}x)"
+        )
+    elif was_alerting and not is_alerting:
+        notify(f"Load average OK again: 5m load {load5:.2f} on {cpus} cpu(s)")
+    state["load_alert"] = is_alerting
+
+
 def main():
     state = load_state()
     check_disk(state)
     check_logs(state)
+    check_memory(state)
+    check_load(state)
     save_state(state)
 
 
