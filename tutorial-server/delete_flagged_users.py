@@ -5,11 +5,14 @@
 #
 # Run manually, e.g.:
 #   docker exec et-juphub /usr/local/bin/delete_flagged_users.py
-# to actually remove the accounts flag_stale_users.py flagged. Deletes the
+# to actually remove ONE account from pending_deletion.txt -- the first
+# entry, which is the most stale one (flag_stale_users.py writes them
+# oldest-first). Run it again to work through the rest, one at a time,
+# rather than bulk-deleting everything pending in one shot. Deletes the
 # Linux user + home directory, and strips the user from name_map.txt and
 # user_registry.txt. This cannot touch the external tutorials-whitelist.txt
 # (that's maintained outside this server), so it prints the whitelist hash
-# for each deleted user's email for manual removal there.
+# for the deleted user's email for manual removal there.
 import base64
 import hashlib
 import os
@@ -41,7 +44,7 @@ def strip_username(path, username):
     kept = [l for l in lines if not l.startswith(username + ":")]
     with open(path, "w") as fd:
         fd.writelines(kept)
-    os.chmod(path, 0o0600)
+    os.chmod(path, 0o0660)
 
 
 def delete_account(username):
@@ -52,7 +55,11 @@ def delete_account(username):
         if os.path.isdir(home):
             shutil.rmtree(home)
         return
-    subprocess.run(["userdel", "-r", username], check=True)
+    # This script runs as notify (see startup.sh), not root -- userdel
+    # needs the narrow sudo rule in notify.sudoers. Still works fine if
+    # invoked as root directly (e.g. a manual `docker exec`): sudo as root
+    # just runs it, no escalation needed.
+    subprocess.run(["sudo", "userdel", "-r", username], check=True)
 
 
 def main():
@@ -63,39 +70,45 @@ def main():
     with open(PENDING) as fd:
         lines = [l.strip() for l in fd if l.strip()]
 
-    remaining = []
-    report = []
-    for line in lines:
-        parts = line.split(":", 2)
-        if len(parts) != 3:
-            print(f"Skipping malformed line: {line}")
-            continue
-        username, email, last_login_iso = parts
-        try:
-            delete_account(username)
-            strip_username(NAME_MAP, username)
-            strip_username(REGISTRY, username)
-            report.append((username, email, codeme(email) if email else None))
-            print(f"Deleted {username} ({email or 'no email on file'})")
-        except Exception as e:
-            print(f"FAILED to delete {username}: {e}")
-            remaining.append(line)
+    if not lines:
+        print("Nothing pending")
+        return
+
+    # Process exactly one entry per run -- the first, which is the most
+    # stale (flag_stale_users.py writes them oldest-first).
+    line, remaining = lines[0], lines[1:]
+    parts = line.split(":", 2)
+    if len(parts) != 3:
+        print(f"Skipping malformed line: {line}")
+        with open(PENDING, "w") as fd:
+            for l in remaining:
+                fd.write(l + "\n")
+        os.chmod(PENDING, 0o0660)
+        return
+
+    username, email, last_login_iso = parts
+    try:
+        delete_account(username)
+        strip_username(NAME_MAP, username)
+        strip_username(REGISTRY, username)
+        print(f"Deleted {username} ({email or 'no email on file'})")
+    except Exception as e:
+        print(f"FAILED to delete {username}: {e}")
+        return  # leave pending_deletion.txt untouched, retry next time
 
     with open(PENDING, "w") as fd:
-        for line in remaining:
-            fd.write(line + "\n")
-    os.chmod(PENDING, 0o0600)
+        for l in remaining:
+            fd.write(l + "\n")
+    os.chmod(PENDING, 0o0660)
 
-    if report:
-        print("\nRemove these hashes from tutorials-whitelist.txt:")
-        for username, email, h in report:
-            if h:
-                print(f"{h}  # {username} <{email}>")
-            else:
-                print(
-                    f"(no email on file, can't compute hash)  # {username} "
-                    "-- check tutorials-whitelist.txt manually if needed"
-                )
+    if email:
+        print("\nRemove this hash from tutorials-whitelist.txt:")
+        print(f"{codeme(email)}  # {username} <{email}>")
+    else:
+        print(
+            f"\nNo email on file for {username} -- check "
+            "tutorials-whitelist.txt manually if needed"
+        )
 
 
 if __name__ == "__main__":

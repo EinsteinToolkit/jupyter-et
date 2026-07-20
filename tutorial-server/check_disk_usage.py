@@ -12,7 +12,6 @@
 # doesn't spam the same alert forever if nobody's free to fix it right away.
 import json
 import os
-import shlex
 import shutil
 import subprocess
 
@@ -57,8 +56,10 @@ def save_state(state):
 
 def notify(message):
     print(message, flush=True)
-    cmd = "telegram-send " + shlex.quote(message)
-    subprocess.run(["su", "-s", "/bin/sh", "-", "notify", "-c", cmd])
+    # This whole script runs as notify via cron now (see startup.sh), so
+    # ~/.config/telegram-send.conf resolves on its own -- no su/--config
+    # hop needed.
+    subprocess.run(["telegram-send", message])
 
 
 def check_disk(state):

@@ -15,7 +15,7 @@ RUN pip3 install oauthenticator==15.1.0 tornado python-oauth2 jupyterhub-dummyau
 RUN curl -fsSL https://deb.nodesource.com/setup_lts.x | bash -
 RUN apt-get install -y nodejs
 RUN apt-get update && \
-    apt-get -y --fix-missing install gnupg policycoreutils cron nodejs logrotate && \
+    apt-get -y --fix-missing install gnupg policycoreutils cron nodejs logrotate sudo && \
     apt-get purge
 
 RUN npm install -g configurable-http-proxy
@@ -38,12 +38,30 @@ RUN chmod 755 /usr/local/bin/flag_stale_users.py /usr/local/bin/delete_flagged_u
 COPY tutorial-server.logrotate /etc/logrotate.d/tutorial-server
 RUN chmod 644 /etc/logrotate.d/tutorial-server
 
-# Low-privilege account telegram-send runs as, so the bot token isn't
-# touched by anything running as root. Its home dir is under /home
+# Low-privilege account the nightly cron jobs run as (see startup.sh),
+# instead of root -- also what telegram-send runs as, so the bot token
+# isn't touched by anything running as root. Its home dir is under /home
 # (persisted volume) but useradd -m here only takes effect if that volume
 # is empty on first creation -- startup.sh re-creates it every boot too,
 # since an already-populated home_fs volume won't pick up new image content.
 RUN useradd -r -m -d /home/notify -s /usr/sbin/nologin notify
+
+# Narrow sudo rights for the couple of actions that genuinely need root
+# (see notify.sudoers). Everything else the nightly jobs do runs as plain
+# notify with no escalation.
+COPY notify.sudoers /etc/sudoers.d/notify
+RUN chmod 440 /etc/sudoers.d/notify
+
+# git-refresh.sh (now running as notify, see startup.sh/crontab.txt) needs
+# to write here. Safe to chown outright at build time since neither path
+# is part of a persisted volume.
+RUN chown notify:notify /jupyter-et /tutorial
+RUN chgrp notify /etc/skel && chmod g+w /etc/skel
+
+# check_disk_usage.py's state file lives here; created notify-owned at
+# build time so it never needs write access to /var/lib itself.
+RUN mkdir -p /var/lib/tutorial-server && chown notify:notify /var/lib/tutorial-server
+
 ENV LANG en_US.UTF-8
 
 # Hide the API token

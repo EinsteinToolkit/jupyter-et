@@ -1,0 +1,12 @@
+# Copyright (c) 2019 Steven R. Brandt, and Roland Haas
+#
+# Distributed under the LGPL
+#
+# Installed at /etc/sudoers.d/notify. The nightly cron jobs run as notify,
+# not root (see startup.sh), but two actions genuinely require root:
+# userdel (delete_flagged_users.py removes other users' accounts) and
+# logrotate (rotating jup-log.txt etc., which are root-owned since
+# JupyterHub itself has to stay root to bind port 443). Everything else
+# those scripts do (reading/writing files under /home, telegram-send,
+# disk/memory/load checks) works as plain notify with no escalation.
+notify ALL=(root) NOPASSWD: /usr/sbin/userdel, /usr/sbin/logrotate

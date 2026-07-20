@@ -1,4 +1,5 @@
 import pwd
+import grp
 import subprocess
 import re
 import os
@@ -7,6 +8,18 @@ import smtplib
 import pprint
 import base64
 import hashlib
+
+# name_map.txt and user_registry.txt are written here (as root, since
+# JupyterHub itself has to stay root to bind port 443) but also read/written
+# by flag_stale_users.py/delete_flagged_users.py, which now run as notify
+# via cron -- share group ownership instead of leaving them root-only.
+def _share_with_notify(path):
+    try:
+        gid = grp.getgrnam("notify").gr_gid
+        os.chown(path, 0, gid)
+        os.chmod(path, 0o0660)
+    except (KeyError, PermissionError, OSError):
+        pass
 
 def codeme(m):
     m = m.lower()
@@ -54,7 +67,7 @@ def record_login(username, email):
     with open(fname, "w") as fd:
         for uname, (em, ts) in entries.items():
             fd.write(f"{uname}:{em}:{ts}\n")
-    os.chmod(fname, 0o0600)
+    _share_with_notify(fname)
 
 pp = pprint.PrettyPrinter(indent=2)
 
@@ -171,7 +184,7 @@ class CILogonWhitelistAuthenticator(CILogonOAuthenticator):
                     break
         with open(self.fname, "a") as fd:
             fd.write(user+":"+full+"\n")
-        os.chmod(self.fname, 0o0600);
+        _share_with_notify(self.fname)
         return user
 
     # new versions of jupyterhub would pass userdict to the check_whitelist
