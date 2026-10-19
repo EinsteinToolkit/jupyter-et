@@ -1,4 +1,5 @@
 set -ex
+set -o pipefail
 
 function cleanup() {
     telegram-send "Exited Tutorial Server Build"

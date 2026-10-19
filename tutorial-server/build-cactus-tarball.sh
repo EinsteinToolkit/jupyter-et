@@ -87,6 +87,16 @@ ADIOS2_INC_DIRS = /usr/local/include
 ADIOS2_LIB_DIRS = /usr/local/lib
 ADIOS2_LIBS = adios2_cxx11_mpi adios2_c_mpi adios2_core_mpi adios2_cxx11 adios2_c adios2_core
 
+# Ubuntu's hdf5.pc alternative selects the MPICH build, which the HDF5
+# thorn does not accept, so it compiles a private static HDF5. Silo in
+# /usr/local is built against the serial system library. Linking the
+# private copy then fails with "DSO missing from command line" for
+# H5Literate in libhdf5_mpich.so. Use the serial library Silo uses.
+HDF5_DIR = /usr
+HDF5_INC_DIRS = /usr/include/hdf5/serial
+HDF5_LIB_DIRS = /usr/lib/x86_64-linux-gnu/hdf5/serial
+HDF5_LIBS = hdf5hl_fortran hdf5_fortran hdf5_hl hdf5
+
 NSIMD_SIMD = SSE2
 EOF
 ./simfactory/bin/sim build -j$(($NCPUS/2)) --thornlist ../einsteintoolkit.th --optionlist tutorial.cfg

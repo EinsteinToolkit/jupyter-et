@@ -21,7 +21,7 @@ COPY notebooks/*.ipynb /etc/skel/
 RUN chmod og+r /tutorial/* /etc/skel/* /usr/local/data/Initial_Data.tgz && \
     chmod og+rx /jupyter-et/start-notebook.sh
 
-RUN python3 -m pip install ipykernel
+RUN python3 -m pip install ipykernel pickleshare
 RUN python3 -m ipykernel install
 
 ENV NB_USER jovyan
